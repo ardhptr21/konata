@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 from loguru import logger
 from pydantic import (
@@ -223,6 +223,10 @@ class KonaChallengeItem(KonaModel):
         hints: list[Hint] = []
         connection_info: str = ''
 
+    class RCTF(KonaModel):
+        # Markdown hints shown to players, in order. Left unset, rCTF keeps the hints set in its admin panel.
+        hints: list[Annotated[str, Field(min_length=1, max_length=10_000)]] | None = Field(default=None, max_length=20)
+
     class Scoring(KonaModel):
         class CTFD(KonaModel):
             decay_function: str = 'logarithmic'
@@ -233,11 +237,17 @@ class KonaChallengeItem(KonaModel):
             eligible_for_tiebreaks: bool = True
             kind: RCTFScoringKind = RCTFScoringKind.DECAY
             dynamic: RCTFDynamicScoring | None = None
+            # CTFd-style logarithmic decay: the number of solves it takes to reach minimum_value.
+            # Left unset, rCTF keeps whatever decay the challenge already has (the CTF-wide formula by default).
+            decay: int | None = Field(default=None, ge=1, le=100_000)
 
             @model_validator(mode='after')
             def _dynamic_source(self) -> 'KonaChallengeItem.Scoring.RCTF':
                 if self.kind == RCTFScoringKind.DYNAMIC and self.dynamic is None:
                     msg = 'scoring.rctf.dynamic must be set when scoring.rctf.kind is "dynamic"'
+                    raise ValueError(msg)
+                if self.kind == RCTFScoringKind.DYNAMIC and self.decay is not None:
+                    msg = 'scoring.rctf.decay only applies when scoring.rctf.kind is "decay"'
                     raise ValueError(msg)
                 return self
 
@@ -317,6 +327,7 @@ class KonaChallengeItem(KonaModel):
     release_time: datetime | None = None
 
     ctfd: CTFD = CTFD()
+    rctf: RCTF = RCTF()
     instancer_config: InstancerConfig | None = None
     admin_bot: AdminBotConfig | None = None
 

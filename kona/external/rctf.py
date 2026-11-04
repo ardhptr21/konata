@@ -23,7 +23,14 @@ def _attr_is_synced(attr: str, remote_value: object, local_value: object) -> boo
         local_code = local_value.get('code') if isinstance(local_value, dict) else None
         return remote_code == local_code
     if attr == 'scoring':
-        return (remote_value or _DECAY_SCORING) == (local_value or _DECAY_SCORING)
+        remote_scoring = dict(remote_value) if isinstance(remote_value, dict) and remote_value else dict(_DECAY_SCORING)
+        local_scoring = dict(local_value) if isinstance(local_value, dict) and local_value else dict(_DECAY_SCORING)
+        # Without a local decay, rCTF keeps the challenge's current one, so a decay set there is not drift.
+        if local_scoring.get('kind') == RCTFScoringKind.DECAY.value and 'decay' not in local_scoring:
+            remote_scoring.pop('decay', None)
+        if remote_scoring.get('decay') is None:
+            remote_scoring.pop('decay', None)
+        return remote_scoring == local_scoring
     return remote_value == local_value
 
 
@@ -113,6 +120,9 @@ class RCTFProvider(ExternalProviderABC):
     def _scoring_payload(self, challenge: KonaChallengeItem) -> dict[str, Any]:
         rctf_scoring = challenge.scoring.rctf
         if rctf_scoring.kind != RCTFScoringKind.DYNAMIC or rctf_scoring.dynamic is None:
+            if rctf_scoring.decay is not None:
+                return {'kind': RCTFScoringKind.DECAY.value, 'decay': rctf_scoring.decay}
+            # rCTF keeps the challenge's current decay when this one is left out
             return {'kind': RCTFScoringKind.DECAY.value}
         return {
             'kind': RCTFScoringKind.DYNAMIC.value,
@@ -161,6 +171,10 @@ class RCTFProvider(ExternalProviderABC):
             'releaseTime': challenge.release_time_ms,
             'scoring': self._scoring_payload(challenge),
         }
+
+        # Only sent when configured, so hints written in the rCTF admin panel survive a sync.
+        if challenge.rctf.hints is not None:
+            challenge_dict['hints'] = challenge.rctf.hints
 
         if challenge.instancer_config is not None:
             challenge_dict['instancerConfig'] = {

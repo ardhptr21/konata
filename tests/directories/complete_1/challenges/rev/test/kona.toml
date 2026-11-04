@@ -31,6 +31,7 @@ scoring.initial_value = 500
 scoring.minimum_value = 100
 
 scoring.rctf.eligible_for_tiebreaks = true
+scoring.rctf.decay = 20
 
 scoring.ctfd.decay_function = "logarithmic"
 scoring.ctfd.decay = 60
@@ -40,6 +41,10 @@ ctfd.type = "dynamic"
 ctfd.topics = ["topic"]
 ctfd.hints = [
     {hint = "hint"},
+]
+
+rctf.hints = [
+    "Look closely at the strings.",
 ]
 
 [[deployment.images]]
